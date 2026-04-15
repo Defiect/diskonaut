@@ -109,6 +109,7 @@ where
                                 &board.tiles,
                                 board.unrenderable_tile_coordinates,
                                 board.selected_index,
+                                file_tree.metric,
                             ),
                             chunks[1],
                         );
@@ -144,6 +145,7 @@ where
                                 &board.tiles,
                                 board.unrenderable_tile_coordinates,
                                 board.selected_index,
+                                file_tree.metric,
                             ),
                             chunks[1],
                         );
@@ -179,6 +181,7 @@ where
                                 &board.tiles,
                                 board.unrenderable_tile_coordinates,
                                 board.selected_index,
+                                file_tree.metric,
                             ),
                             chunks[1],
                         );
@@ -216,6 +219,7 @@ where
                                 &board.tiles,
                                 board.unrenderable_tile_coordinates,
                                 board.selected_index,
+                                file_tree.metric,
                             ),
                             chunks[1],
                         );
@@ -291,6 +295,7 @@ where
                                 &board.tiles,
                                 board.unrenderable_tile_coordinates,
                                 board.selected_index,
+                                file_tree.metric,
                             ),
                             chunks[1],
                         );
@@ -316,6 +321,7 @@ where
                                 &board.tiles,
                                 board.unrenderable_tile_coordinates,
                                 board.selected_index,
+                                file_tree.metric,
                             ),
                             chunks[1],
                         );

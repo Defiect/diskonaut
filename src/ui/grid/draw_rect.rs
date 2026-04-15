@@ -3,6 +3,7 @@ use ::tui::layout::Rect;
 use ::tui::style::{Color, Modifier, Style};
 use ::unicode_width::UnicodeWidthStr;
 
+use crate::state::Metric;
 use crate::state::tiles::{FileType, Tile};
 use crate::ui::format::{truncate_middle, DisplaySize, DisplaySizeRounded};
 use crate::ui::grid::{boundaries, draw_next_symbol};
@@ -34,7 +35,7 @@ fn tile_first_line(tile: &Tile) -> String {
     }
 }
 
-fn tile_second_line(tile: &Tile) -> String {
+fn tile_second_line_size(tile: &Tile) -> String {
     let max_text_length = if tile.width > 2 { tile.width - 2 } else { 0 };
     let percentage = &tile.percentage;
     let display_size = DisplaySize(tile.size as f64);
@@ -56,6 +57,47 @@ fn tile_second_line(tile: &Tile) -> String {
         format!("{:.0}%", (percentage * 100.0).round())
     } else {
         unreachable!("trying to render a rect of less than minimum size")
+    }
+}
+
+fn count_percentage_label(percentage: f64) -> String {
+    format!("{:.0}%", (percentage * 100.0).round())
+}
+
+fn tile_second_line_count(tile: &Tile) -> String {
+    let max_text_length = if tile.width > 2 { tile.width - 2 } else { 0 } as usize;
+    let percentage = count_percentage_label(tile.percentage);
+
+    if tile.file_type == FileType::File {
+        return tile_second_line_size(tile);
+    }
+
+    let file_count = tile.file_count.to_string();
+    let size = format!("{}", DisplaySize(tile.size as f64));
+    let rounded_size = format!("{}", DisplaySizeRounded(tile.size as f64));
+
+    let candidates = [
+        format!("{} files ({}) [{}]", file_count, percentage, size),
+        format!("{} ({}) [{}]", file_count, percentage, size),
+        format!("{} ({}) [{}]", file_count, percentage, rounded_size),
+        format!("{} ({})", file_count, percentage),
+        format!("{} {}", file_count, percentage),
+        file_count.clone(),
+    ];
+
+    for candidate in candidates.iter() {
+        if candidate.width() <= max_text_length {
+            return candidate.clone();
+        }
+    }
+
+    truncate_middle(&file_count, max_text_length as u16)
+}
+
+fn tile_second_line(tile: &Tile, metric: Metric) -> String {
+    match metric {
+        Metric::Size => tile_second_line_size(tile),
+        Metric::Count => tile_second_line_count(tile),
     }
 }
 
@@ -168,12 +210,12 @@ pub fn draw_filled_rect(buf: &mut Buffer, fill_style: Style, rect: &Rect) {
     }
 }
 
-pub fn draw_tile_text_on_grid(buf: &mut Buffer, tile: &Tile, selected: bool) {
+pub fn draw_tile_text_on_grid(buf: &mut Buffer, tile: &Tile, metric: Metric, selected: bool) {
     let first_line = tile_first_line(&tile);
     let first_line_length = first_line.width() as u16;
     let first_line_start_position =
         ((tile.width - first_line_length) as f64 / 2.0).ceil() as u16 + tile.x;
-    let second_line = tile_second_line(&tile);
+    let second_line = tile_second_line(&tile, metric);
     let second_line_length = second_line.width();
     let second_line_start_position =
         ((tile.width - second_line_length as u16) as f64 / 2.0).ceil() as u16 + tile.x;

@@ -3,6 +3,7 @@ use ::tui::layout::Rect;
 use ::tui::style::{Color, Style};
 use ::tui::widgets::Widget;
 
+use crate::state::Metric;
 use crate::state::tiles::Tile;
 use crate::ui::grid::{draw_rect_on_grid, draw_tile_text_on_grid};
 
@@ -44,6 +45,7 @@ pub struct RectangleGrid<'a> {
     rectangles: &'a [Tile],
     small_files_coordinates: Option<(u16, u16)>,
     selected_rect_index: Option<usize>,
+    metric: Metric,
 }
 
 impl<'a> RectangleGrid<'a> {
@@ -51,11 +53,13 @@ impl<'a> RectangleGrid<'a> {
         rectangles: &'a [Tile],
         small_files_coordinates: Option<(u16, u16)>,
         selected_rect_index: Option<usize>,
+        metric: Metric,
     ) -> Self {
         RectangleGrid {
             rectangles,
             small_files_coordinates,
             selected_rect_index,
+            metric,
         }
     }
 }
@@ -71,7 +75,7 @@ impl<'a> Widget for RectangleGrid<'a> {
                 } else {
                     false
                 };
-                draw_tile_text_on_grid(buf, &tile, selected);
+                draw_tile_text_on_grid(buf, &tile, self.metric, selected);
                 draw_rect_on_grid(buf, (tile.x, tile.y), (tile.width, tile.height));
             }
         }
