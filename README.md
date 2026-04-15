@@ -7,6 +7,8 @@ Given a path on your hard-drive (which could also be the root path, eg. `/`). `d
 
 Once completed, you can navigate through subfolders, getting a visual treemap representation of what's taking up your disk space. You can even delete files or folders and `diskonaut` will track how much space you've freed up in this session.
 
+If you'd rather explore by number of files than by cumulative size, start `diskonaut` with `--count`. In that mode the treemap is weighted by recursive file count, while sizes remain visible as secondary context.
+
 ## Installation
 
 ### Download a prebuilt binary
@@ -69,6 +71,11 @@ Right now `diskonaut` supports linux, macos and windows.
 Either start `diskonaut` in the folder you want to scan, or provide it with the folder you'd like to scan as an argument:
 ```
 $ diskonaut /home/aram
+```
+
+To explore by file count instead of size:
+```
+$ diskonaut --count /home/aram
 ```
 
 ## Contributing

@@ -1,5 +1,6 @@
 use ::tui::layout::Rect;
 
+use crate::state::Metric;
 use crate::state::files::Folder;
 use crate::state::tiles::files_in_folder::FileType;
 use crate::state::tiles::{files_in_folder, FileMetadata, Tile, TreeMap};
@@ -12,14 +13,15 @@ pub struct Board {
     pub zoom_level: usize,
     area: Rect,
     files: Vec<FileMetadata>,
+    metric: Metric,
 }
 
 impl Board {
-    pub fn new(folder: &Folder) -> Self {
+    pub fn new(folder: &Folder, metric: Metric) -> Self {
         Board {
             tiles: vec![],
             unrenderable_tile_coordinates: None,
-            files: files_in_folder(folder, 0),
+            files: files_in_folder(folder, 0, metric),
             selected_index: None,
             previous_indices_and_zoom_level: vec![],
             zoom_level: 0,
@@ -29,10 +31,11 @@ impl Board {
                 width: 0,
                 height: 0,
             },
+            metric,
         }
     }
     pub fn change_files(&mut self, folder: &Folder) {
-        self.files = files_in_folder(folder, self.zoom_level);
+        self.files = files_in_folder(folder, self.zoom_level, self.metric);
         self.fill();
     }
     pub fn change_area(&mut self, area: &Rect) {
@@ -172,20 +175,20 @@ impl Board {
     pub fn zoom_in(&mut self, folder: &Folder) {
         if self.zoom_level < self.files.len() {
             self.zoom_level += 1;
-            self.files = files_in_folder(folder, self.zoom_level);
+            self.files = files_in_folder(folder, self.zoom_level, self.metric);
             self.fill();
         }
     }
     pub fn zoom_out(&mut self, folder: &Folder) {
         if self.zoom_level > 0 {
             self.zoom_level -= 1;
-            self.files = files_in_folder(folder, self.zoom_level);
+            self.files = files_in_folder(folder, self.zoom_level, self.metric);
             self.fill();
         }
     }
     pub fn reset_zoom(&mut self, folder: &Folder) {
         self.zoom_level = 0;
-        self.files = files_in_folder(folder, self.zoom_level);
+        self.files = files_in_folder(folder, self.zoom_level, self.metric);
         self.fill();
     }
     pub fn reset_zoom_index(&mut self) {

@@ -7,7 +7,7 @@ use ::tui::backend::Backend;
 use crate::messages::{handle_instructions, Instruction};
 use crate::state::files::{FileOrFolder, FileTree, Folder};
 use crate::state::tiles::Board;
-use crate::state::{FileToDelete, UiEffects};
+use crate::state::{FileToDelete, Metric, UiEffects};
 use crate::ui::Display;
 use crate::Event;
 
@@ -46,15 +46,17 @@ where
         path_in_filesystem: PathBuf,
         event_sender: SyncSender<Event>,
         show_apparent_size: bool,
+        metric: Metric,
         disable_delete_confirmation: bool,
     ) -> Self {
         let display = Display::new(terminal_backend);
-        let board = Board::new(&Folder::new(&path_in_filesystem));
+        let board = Board::new(&Folder::new(&path_in_filesystem), metric);
         let base_folder = Folder::new(&path_in_filesystem);
         let file_tree = ManuallyDrop::new(FileTree::new(
             base_folder,
             path_in_filesystem,
             show_apparent_size,
+            metric,
         ));
         // we use ManuallyDrop here because otherwise the app takes forever to exit
         let ui_effects = UiEffects::new();
@@ -210,6 +212,7 @@ where
             path_to_file,
             file_type: currently_selected.file_type,
             num_descendants: currently_selected.descendants,
+            file_count: currently_selected.file_count,
             size: currently_selected.size,
         };
         Some(file_to_delete)
@@ -285,6 +288,7 @@ where
     }
     fn remove_file_from_ui(&mut self, file_to_delete: &FileToDelete) {
         self.file_tree.space_freed += file_to_delete.size;
+        self.file_tree.files_removed += file_to_delete.file_count;
         self.file_tree.delete_file(file_to_delete);
         self.board.reset_selected_index();
     }

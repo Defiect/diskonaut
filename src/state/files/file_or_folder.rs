@@ -18,6 +18,13 @@ impl FileOrFolder {
             FileOrFolder::File(file) => file.size,
         }
     }
+
+    pub fn file_count(&self) -> u64 {
+        match self {
+            FileOrFolder::Folder(folder) => folder.recursive_file_count,
+            FileOrFolder::File(_file) => 1,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +39,7 @@ pub struct Folder {
     pub contents: HashMap<OsString, FileOrFolder>,
     pub size: u128,
     pub num_descendants: u64,
+    pub recursive_file_count: u64,
 }
 
 impl From<OsString> for Folder {
@@ -41,6 +49,7 @@ impl From<OsString> for Folder {
             contents: HashMap::new(),
             size: 0,
             num_descendants: 0,
+            recursive_file_count: 0,
         }
     }
 }
@@ -52,6 +61,7 @@ impl Folder {
             contents: HashMap::new(),
             size: 0,
             num_descendants: 0,
+            recursive_file_count: 0,
         }
     }
 
@@ -126,6 +136,7 @@ impl Folder {
                 .or_insert(FileOrFolder::Folder(Folder::from(name)));
             self.size += size;
             self.num_descendants += 1;
+            self.recursive_file_count += 1;
             match path_entry {
                 FileOrFolder::Folder(folder) => {
                     folder.add_file(path.iter().skip(1).collect(), size);
@@ -140,6 +151,7 @@ impl Folder {
                 .to_os_string();
             self.size += size;
             self.num_descendants += 1;
+            self.recursive_file_count += 1;
             self.contents
                 .insert(name.clone(), FileOrFolder::File(File { name, size }));
         }
@@ -174,11 +186,17 @@ impl Folder {
                 FileOrFolder::Folder(folder) => folder.num_descendants,
                 FileOrFolder::File(_file) => 1,
             };
+            let removed_file_count = self
+                .contents
+                .get(name)
+                .expect("could not find folder")
+                .file_count();
             self.size -= removed_size;
             self.num_descendants -= removed_descendents;
+            self.recursive_file_count -= removed_file_count;
             self.contents.remove(name);
         } else {
-            let (removed_size, removed_descendents) = {
+            let (removed_size, removed_descendents, removed_file_count) = {
                 let item_to_remove = self
                     .path(Vec::from(folders_to_traverse.clone()))
                     .expect("could not find item to delete");
@@ -187,7 +205,7 @@ impl Folder {
                     FileOrFolder::Folder(folder) => folder.num_descendants,
                     FileOrFolder::File(_file) => 1,
                 };
-                (removed_size, removed_descendents)
+                (removed_size, removed_descendents, item_to_remove.file_count())
             };
             let next_name = folders_to_traverse
                 .pop_front()
@@ -200,12 +218,49 @@ impl Folder {
                 FileOrFolder::Folder(folder) => {
                     self.size -= removed_size;
                     self.num_descendants -= removed_descendents;
+                    self.recursive_file_count -= removed_file_count;
                     folder.delete_path(&Vec::from(folders_to_traverse));
                 }
                 FileOrFolder::File(_) => {
                     panic!("got a file in the middle of a path");
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+
+    use crate::state::files::FileOrFolder;
+
+    use super::Folder;
+
+    #[test]
+    fn recursive_file_count_tracks_files_but_not_directories() {
+        let mut folder = Folder::new(&PathBuf::from("/tmp/base"));
+        folder.add_folder(PathBuf::from("empty"));
+        folder.add_file(PathBuf::from("nested/file.txt"), 20);
+        folder.add_file(PathBuf::from("top.txt"), 10);
+
+        assert_eq!(folder.recursive_file_count, 2);
+        match folder
+            .contents
+            .get(&OsString::from("nested"))
+            .expect("expected nested folder")
+        {
+            FileOrFolder::Folder(folder) => assert_eq!(folder.recursive_file_count, 1),
+            FileOrFolder::File(_) => panic!("expected folder"),
+        }
+        match folder
+            .contents
+            .get(&OsString::from("empty"))
+            .expect("expected empty folder")
+        {
+            FileOrFolder::Folder(folder) => assert_eq!(folder.recursive_file_count, 0),
+            FileOrFolder::File(_) => panic!("expected folder"),
         }
     }
 }

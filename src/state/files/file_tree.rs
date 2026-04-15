@@ -3,26 +3,35 @@ use ::std::fs::Metadata;
 use ::std::path::{Path, PathBuf};
 
 use crate::state::files::{FileOrFolder, Folder};
-use crate::state::FileToDelete;
+use crate::state::{FileToDelete, Metric};
 
 pub struct FileTree {
     pub current_folder_names: Vec<OsString>,
     pub space_freed: u128,
+    pub files_removed: u64,
     pub failed_to_read: u64,
     pub path_in_filesystem: PathBuf,
     base_folder: Folder,
     show_apparent_size: bool,
+    pub metric: Metric,
 }
 
 impl FileTree {
-    pub fn new(base_folder: Folder, path_in_filesystem: PathBuf, show_apparent_size: bool) -> Self {
+    pub fn new(
+        base_folder: Folder,
+        path_in_filesystem: PathBuf,
+        show_apparent_size: bool,
+        metric: Metric,
+    ) -> Self {
         FileTree {
             base_folder,
             current_folder_names: Vec::new(),
             path_in_filesystem,
             space_freed: 0,
+            files_removed: 0,
             failed_to_read: 0,
             show_apparent_size,
+            metric,
         }
     }
     pub fn get_total_size(&self) -> u128 {
@@ -30,6 +39,9 @@ impl FileTree {
     }
     pub fn get_total_descendants(&self) -> u64 {
         self.base_folder.num_descendants
+    }
+    pub fn get_total_file_count(&self) -> u64 {
+        self.base_folder.recursive_file_count
     }
     pub fn get_current_folder(&self) -> &Folder {
         if self.current_folder_names.is_empty() {
@@ -46,6 +58,9 @@ impl FileTree {
     }
     pub fn get_current_folder_size(&self) -> u128 {
         self.get_current_folder().size
+    }
+    pub fn get_current_folder_file_count(&self) -> u64 {
+        self.get_current_folder().recursive_file_count
     }
     pub fn get_current_path(&self) -> PathBuf {
         let mut full_path = PathBuf::from(&self.path_in_filesystem);

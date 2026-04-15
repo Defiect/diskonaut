@@ -4,6 +4,7 @@ use ::tui::layout::Rect;
 use ::tui::style::{Color, Modifier, Style};
 use ::tui::widgets::Widget;
 
+use crate::state::Metric;
 use crate::ui::format::DisplaySize;
 use crate::ui::title::{CellSizeOpt, TitleTelescope};
 use crate::ui::FolderInfo;
@@ -17,6 +18,8 @@ pub struct TitleLine<'a> {
     base_path_info: FolderInfo<'a>,
     current_path_info: FolderInfo<'a>,
     space_freed: u128,
+    files_removed: u64,
+    metric: Metric,
     show_loading: bool,
     progress_indicator: u64,
     read_errors: Option<u64>,
@@ -30,11 +33,15 @@ impl<'a> TitleLine<'a> {
         base_path_info: FolderInfo<'a>,
         current_path_info: FolderInfo<'a>,
         space_freed: u128,
+        files_removed: u64,
+        metric: Metric,
     ) -> Self {
         Self {
             base_path_info,
             current_path_info,
             space_freed,
+            files_removed,
+            metric,
             progress_indicator: 0,
             read_errors: None,
             show_loading: false,
@@ -73,6 +80,14 @@ impl<'a> TitleLine<'a> {
     }
 }
 
+fn file_label(count: u64) -> String {
+    if count == 1 {
+        "1 file".to_string()
+    } else {
+        format!("{} files", count)
+    }
+}
+
 impl<'a> Widget for TitleLine<'a> {
     fn render(self, rect: Rect, buf: &mut Buffer) {
         let base_path = &self
@@ -106,34 +121,69 @@ impl<'a> Widget for TitleLine<'a> {
         let separator = str::replace(&separator, "\\", "/");
         let total_size = DisplaySize(self.base_path_info.size as f64);
         let total_descendants = &self.base_path_info.num_descendants;
+        let total_file_count = self.base_path_info.file_count;
         let current_folder_size = DisplaySize(self.current_path_info.size as f64);
         let current_folder_descendants = self.current_path_info.num_descendants;
+        let current_folder_file_count = self.current_path_info.file_count;
         let space_freed = DisplaySize(self.space_freed as f64);
+        let files_removed = file_label(self.files_removed);
 
         let mut default_style = Style::default().fg(Color::Yellow);
         if !self.show_loading {
             default_style = default_style.add_modifier(Modifier::BOLD);
         };
         let mut title_telescope = TitleTelescope::new(default_style);
-        if self.show_loading {
-            title_telescope.append_to_left_side(vec![
-                CellSizeOpt::new(format!(
-                    "Scanning: {} ({} files)",
-                    total_size, total_descendants
-                )),
-                CellSizeOpt::new(format!("Scanning: {}", total_size)),
-                CellSizeOpt::new(format!("{}", total_size)),
-            ]);
-        } else {
-            title_telescope.append_to_left_side(vec![
-                CellSizeOpt::new(format!(
-                    "Total: {} ({} files), freed: {}",
-                    total_size, total_descendants, space_freed
-                )),
-                CellSizeOpt::new(format!("Total: {}, freed: {}", total_size, space_freed)),
-                CellSizeOpt::new(format!("Total: {}", total_size)),
-                CellSizeOpt::new(format!("{}", total_size)),
-            ]);
+        match (self.show_loading, self.metric) {
+            (true, Metric::Size) => {
+                title_telescope.append_to_left_side(vec![
+                    CellSizeOpt::new(format!(
+                        "Scanning: {} ({})",
+                        total_size,
+                        file_label(*total_descendants)
+                    )),
+                    CellSizeOpt::new(format!("Scanning: {}", total_size)),
+                    CellSizeOpt::new(format!("{}", total_size)),
+                ]);
+            }
+            (true, Metric::Count) => {
+                title_telescope.append_to_left_side(vec![
+                    CellSizeOpt::new(format!(
+                        "Scanning: {} ({})",
+                        file_label(total_file_count),
+                        total_size
+                    )),
+                    CellSizeOpt::new(format!("Scanning: {}", file_label(total_file_count))),
+                    CellSizeOpt::new(file_label(total_file_count)),
+                ]);
+            }
+            (false, Metric::Size) => {
+                title_telescope.append_to_left_side(vec![
+                    CellSizeOpt::new(format!(
+                        "Total: {} ({} files), freed: {}",
+                        total_size, total_descendants, space_freed
+                    )),
+                    CellSizeOpt::new(format!("Total: {}, freed: {}", total_size, space_freed)),
+                    CellSizeOpt::new(format!("Total: {}", total_size)),
+                    CellSizeOpt::new(format!("{}", total_size)),
+                ]);
+            }
+            (false, Metric::Count) => {
+                title_telescope.append_to_left_side(vec![
+                    CellSizeOpt::new(format!(
+                        "Total: {}, removed: {} ({})",
+                        file_label(total_file_count),
+                        files_removed,
+                        total_size
+                    )),
+                    CellSizeOpt::new(format!(
+                        "Total: {}, removed: {}",
+                        file_label(total_file_count),
+                        files_removed
+                    )),
+                    CellSizeOpt::new(format!("Total: {}", file_label(total_file_count))),
+                    CellSizeOpt::new(file_label(total_file_count)),
+                ]);
+            }
         };
         if let Some(read_errors) = self.read_errors {
             title_telescope.append_to_left_side(vec![
@@ -154,20 +204,42 @@ impl<'a> Widget for TitleLine<'a> {
         }
         title_telescope.append_to_right_side(vec![CellSizeOpt::new(base_path.to_string())]);
         if !current_path.is_empty() {
-            title_telescope.append_to_right_side(vec![
-                CellSizeOpt::new(format!(
-                    "{}{} ({}, {} files)",
-                    separator, current_path, current_folder_size, current_folder_descendants
-                ))
-                .style(default_style.fg(Color::Green)),
-                CellSizeOpt::new(format!(
-                    "{}{} ({})",
-                    separator, current_path, current_folder_size
-                ))
-                .style(default_style.fg(Color::Green)),
-                CellSizeOpt::new(format!("{}{}", separator, current_path))
+            let path_cells = match self.metric {
+                Metric::Size => vec![
+                    CellSizeOpt::new(format!(
+                        "{}{} ({}, {} files)",
+                        separator, current_path, current_folder_size, current_folder_descendants
+                    ))
                     .style(default_style.fg(Color::Green)),
-            ]);
+                    CellSizeOpt::new(format!(
+                        "{}{} ({})",
+                        separator, current_path, current_folder_size
+                    ))
+                    .style(default_style.fg(Color::Green)),
+                    CellSizeOpt::new(format!("{}{}", separator, current_path))
+                        .style(default_style.fg(Color::Green)),
+                ],
+                Metric::Count => vec![
+                    CellSizeOpt::new(format!(
+                        "{}{} ({}, {})",
+                        separator,
+                        current_path,
+                        file_label(current_folder_file_count),
+                        current_folder_size
+                    ))
+                    .style(default_style.fg(Color::Green)),
+                    CellSizeOpt::new(format!(
+                        "{}{} ({})",
+                        separator,
+                        current_path,
+                        file_label(current_folder_file_count)
+                    ))
+                    .style(default_style.fg(Color::Green)),
+                    CellSizeOpt::new(format!("{}{}", separator, current_path))
+                        .style(default_style.fg(Color::Green)),
+                ],
+            };
+            title_telescope.append_to_right_side(path_cells);
         }
         if let Some(zoom_level) = self.zoom_level {
             title_telescope.append_to_right_side(vec![

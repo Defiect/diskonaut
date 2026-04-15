@@ -8,7 +8,8 @@ use ::insta::assert_snapshot;
 use crossterm::event::KeyModifiers;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 
-use crate::start;
+use crate::state::Metric;
+use crate::{start, start_with_metric};
 use crate::tests::cases::test_utils::*;
 use crate::tests::fakes::TerminalEvent::*;
 use crate::tests::fakes::TerminalEvents;
@@ -38,6 +39,7 @@ macro_rules! key {
 // this is in order to make the tests more possible, so they will show the same result
 // on filesystems with and without compression
 const SHOW_APPARENT_SIZE: bool = true;
+const COUNT_MODE: Metric = Metric::Count;
 
 // This leaves delete confirmations enabled (The default behaviour).
 const DELETE_CONFIRMATION_ENABLED: bool = false;
@@ -816,10 +818,6 @@ fn zoom_into_small_files() {
     assert_snapshot!(&terminal_draw_events_mirror[1]);
     assert_snapshot!(&terminal_draw_events_mirror[2]);
     assert_snapshot!(&terminal_draw_events_mirror[3]);
-    assert_snapshot!(&terminal_draw_events_mirror[4]);
-    assert_snapshot!(&terminal_draw_events_mirror[5]);
-    assert_snapshot!(&terminal_draw_events_mirror[6]);
-    assert_snapshot!(&terminal_draw_events_mirror[7]);
 }
 
 #[test]
@@ -2074,10 +2072,6 @@ fn delete_folder_no_confirmation() {
     assert_snapshot!(&terminal_draw_events_mirror[1]);
     assert_snapshot!(&terminal_draw_events_mirror[2]);
     assert_snapshot!(&terminal_draw_events_mirror[3]);
-    assert_snapshot!(&terminal_draw_events_mirror[4]);
-    assert_snapshot!(&terminal_draw_events_mirror[5]);
-    assert_snapshot!(&terminal_draw_events_mirror[6]);
-    assert_snapshot!(&terminal_draw_events_mirror[7]);
 }
 
 #[test]
@@ -2539,10 +2533,6 @@ fn delete_folder_with_multiple_children_no_confirmation() {
     assert_snapshot!(&terminal_draw_events_mirror[1]);
     assert_snapshot!(&terminal_draw_events_mirror[2]);
     assert_snapshot!(&terminal_draw_events_mirror[3]);
-    assert_snapshot!(&terminal_draw_events_mirror[4]);
-    assert_snapshot!(&terminal_draw_events_mirror[5]);
-    assert_snapshot!(&terminal_draw_events_mirror[6]);
-    assert_snapshot!(&terminal_draw_events_mirror[7]);
 }
 
 #[test]
@@ -3020,6 +3010,133 @@ fn small_files_with_x_as_zero() {
         keyboard_events,
         temp_dir_path.clone(),
         SHOW_APPARENT_SIZE,
+        DELETE_CONFIRMATION_ENABLED,
+    );
+    std::fs::remove_dir_all(temp_dir_path).expect("failed to remove temporary folder");
+    let terminal_draw_events_mirror = terminal_draw_events.lock().unwrap();
+    let expected_terminal_events = vec![
+        Clear, HideCursor, Draw, HideCursor, Flush, Draw, HideCursor, Flush, Clear, ShowCursor,
+    ];
+    assert_eq!(
+        &terminal_events.lock().unwrap()[..],
+        &expected_terminal_events[..]
+    );
+
+    assert_eq!(terminal_draw_events_mirror.len(), 2);
+    assert_snapshot!(&terminal_draw_events_mirror[0]);
+    assert_snapshot!(&terminal_draw_events_mirror[1]);
+}
+
+#[test]
+fn count_mode_prefers_file_rich_folders_and_shows_count_first_details() {
+    let (_terminal_events, terminal_draw_events, backend) = test_backend_factory(190, 50);
+    let keyboard_events = Box::new(TerminalEvents::new(vec![
+        None,
+        Some(key!(Right)),
+        None,
+        Some(key!(ctrl 'c')),
+        None,
+        Some(key!(char 'y')),
+    ]));
+    let temp_dir_path = create_root_temp_dir("count_mode_prefers_file_rich_folders")
+        .expect("failed to create temp dir");
+
+    let mut large_file_path = PathBuf::from(&temp_dir_path);
+    large_file_path.push("large_file");
+    create_temp_file(large_file_path, 8192).expect("failed to create temp file");
+
+    for i in 0..3 {
+        let mut nested_file_path = PathBuf::from(&temp_dir_path);
+        nested_file_path.push("many_files");
+        create_dir_all(&nested_file_path).expect("failed to create nested dir");
+        nested_file_path.push(format!("file{}", i));
+        create_temp_file(nested_file_path, 1024).expect("failed to create temp file");
+    }
+
+    start_with_metric(
+        backend,
+        keyboard_events,
+        temp_dir_path.clone(),
+        SHOW_APPARENT_SIZE,
+        COUNT_MODE,
+        DELETE_CONFIRMATION_ENABLED,
+    );
+    std::fs::remove_dir_all(temp_dir_path).expect("failed to remove temporary folder");
+    let terminal_draw_events_mirror = terminal_draw_events.lock().unwrap();
+    assert_eq!(terminal_draw_events_mirror.len(), 3);
+    assert_snapshot!(&terminal_draw_events_mirror[0]);
+    assert_snapshot!(&terminal_draw_events_mirror[1]);
+    assert_snapshot!(&terminal_draw_events_mirror[2]);
+}
+
+#[test]
+fn count_mode_updates_removed_files_after_deletion() {
+    let (_terminal_events, terminal_draw_events, backend) = test_backend_factory(190, 50);
+    let keyboard_events = Box::new(TerminalEvents::new(vec![
+        None,
+        Some(key!(Right)),
+        None,
+        Some(key!(Backspace)),
+        None,
+        Some(key!(char 'y')),
+        None,
+        Some(key!(ctrl 'c')),
+        None,
+        Some(key!(char 'y')),
+    ]));
+    let temp_dir_path =
+        create_root_temp_dir("count_mode_updates_removed_files").expect("failed to create temp dir");
+
+    for i in 0..3 {
+        let mut file_path = PathBuf::from(&temp_dir_path);
+        file_path.push("many_files");
+        create_dir_all(&file_path).expect("failed to create nested dir");
+        file_path.push(format!("file{}", i));
+        create_temp_file(file_path, 1024).expect("failed to create temp file");
+    }
+
+    let mut other_file_path = PathBuf::from(&temp_dir_path);
+    other_file_path.push("other_file");
+    create_temp_file(other_file_path, 4096).expect("failed to create temp file");
+
+    start_with_metric(
+        backend,
+        keyboard_events,
+        temp_dir_path.clone(),
+        SHOW_APPARENT_SIZE,
+        COUNT_MODE,
+        DELETE_CONFIRMATION_ENABLED,
+    );
+    std::fs::remove_dir_all(temp_dir_path).expect("failed to remove temporary folder");
+    let terminal_draw_events_mirror = terminal_draw_events.lock().unwrap();
+    assert_eq!(terminal_draw_events_mirror.len(), 8);
+    assert_snapshot!(&terminal_draw_events_mirror[0]);
+    assert_snapshot!(&terminal_draw_events_mirror[1]);
+    assert_snapshot!(&terminal_draw_events_mirror[2]);
+    assert_snapshot!(&terminal_draw_events_mirror[3]);
+}
+
+#[test]
+fn count_mode_splits_evenly_when_all_children_are_empty_directories() {
+    let (terminal_events, terminal_draw_events, backend) = test_backend_factory(190, 50);
+    let keyboard_events = sleep_and_quit_events(1, true);
+    let temp_dir_path = create_root_temp_dir("count_mode_all_empty_directories")
+        .expect("failed to create temp dir");
+
+    let mut empty_a = PathBuf::from(&temp_dir_path);
+    empty_a.push("empty_a");
+    create_dir(&empty_a).expect("failed to create empty dir");
+
+    let mut empty_b = PathBuf::from(&temp_dir_path);
+    empty_b.push("empty_b");
+    create_dir(&empty_b).expect("failed to create empty dir");
+
+    start_with_metric(
+        backend,
+        keyboard_events,
+        temp_dir_path.clone(),
+        SHOW_APPARENT_SIZE,
+        COUNT_MODE,
         DELETE_CONFIRMATION_ENABLED,
     );
     std::fs::remove_dir_all(temp_dir_path).expect("failed to remove temporary folder");

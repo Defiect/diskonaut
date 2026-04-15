@@ -16,6 +16,7 @@ pub struct FolderInfo<'a> {
     pub path: &'a PathBuf,
     pub size: u128,
     pub num_descendants: u64,
+    pub file_count: u64,
 }
 
 pub struct Display<B>
@@ -51,18 +52,22 @@ where
                 let current_path = file_tree.get_current_path();
                 let current_path_size = file_tree.get_current_folder_size();
                 let current_path_descendants = file_tree.get_current_folder().num_descendants;
+                let current_path_file_count = file_tree.get_current_folder_file_count();
                 let base_path_size = file_tree.get_total_size();
                 let base_path_descendants = file_tree.get_total_descendants();
+                let base_path_file_count = file_tree.get_total_file_count();
                 let current_path_info = FolderInfo {
                     path: &current_path,
                     size: current_path_size,
                     num_descendants: current_path_descendants,
+                    file_count: current_path_file_count,
                 };
                 let path_in_filesystem = &file_tree.path_in_filesystem;
                 let base_path_info = FolderInfo {
                     path: &path_in_filesystem,
                     size: base_path_size,
                     num_descendants: base_path_descendants,
+                    file_count: base_path_file_count,
                 };
                 let mut chunks = Layout::default()
                     .direction(Direction::Vertical)
@@ -89,6 +94,8 @@ where
                                 base_path_info,
                                 current_path_info,
                                 file_tree.space_freed,
+                                file_tree.files_removed,
+                                file_tree.metric,
                             )
                             .progress_indicator(ui_effects.loading_progress_indicator)
                             .path_error(ui_effects.current_path_is_red)
@@ -109,6 +116,7 @@ where
                             BottomLine::new()
                                 .currently_selected(board.currently_selected())
                                 .last_read_path(ui_effects.last_read_path.as_ref())
+                                .metric(file_tree.metric)
                                 .hide_delete()
                                 .hide_small_files_legend(
                                     board.unrenderable_tile_coordinates.is_none(),
@@ -122,6 +130,8 @@ where
                                 base_path_info,
                                 current_path_info,
                                 file_tree.space_freed,
+                                file_tree.files_removed,
+                                file_tree.metric,
                             )
                             .path_error(ui_effects.current_path_is_red)
                             .flash_space(ui_effects.flash_space_freed)
@@ -140,6 +150,7 @@ where
                         f.render_widget(
                             BottomLine::new()
                                 .currently_selected(board.currently_selected())
+                                .metric(file_tree.metric)
                                 .hide_small_files_legend(
                                     board.unrenderable_tile_coordinates.is_none(),
                                 ),
@@ -155,6 +166,8 @@ where
                                 base_path_info,
                                 current_path_info,
                                 file_tree.space_freed,
+                                file_tree.files_removed,
+                                file_tree.metric,
                             )
                             .path_error(ui_effects.current_path_is_red)
                             .zoom_level(board.zoom_level)
@@ -172,6 +185,7 @@ where
                         f.render_widget(
                             BottomLine::new()
                                 .currently_selected(board.currently_selected())
+                                .metric(file_tree.metric)
                                 .hide_small_files_legend(
                                     board.unrenderable_tile_coordinates.is_none(),
                                 ),
@@ -188,6 +202,8 @@ where
                                 base_path_info,
                                 current_path_info,
                                 file_tree.space_freed,
+                                file_tree.files_removed,
+                                file_tree.metric,
                             )
                             .path_error(ui_effects.current_path_is_red)
                             .flash_space(ui_effects.flash_space_freed)
@@ -206,6 +222,7 @@ where
                         f.render_widget(
                             BottomLine::new()
                                 .currently_selected(board.currently_selected())
+                                .metric(file_tree.metric)
                                 .hide_small_files_legend(
                                     board.unrenderable_tile_coordinates.is_none(),
                                 ),
@@ -221,6 +238,8 @@ where
                                     base_path_info,
                                     current_path_info,
                                     file_tree.space_freed,
+                                    file_tree.files_removed,
+                                    file_tree.metric,
                                 )
                                 .path_error(ui_effects.current_path_is_red)
                                 .flash_space(ui_effects.flash_space_freed)
@@ -231,6 +250,7 @@ where
                             f.render_widget(
                                 BottomLine::new()
                                     .currently_selected(board.currently_selected())
+                                    .metric(file_tree.metric)
                                     .hide_small_files_legend(
                                         board.unrenderable_tile_coordinates.is_none(),
                                     ),
@@ -243,6 +263,8 @@ where
                                     base_path_info,
                                     current_path_info,
                                     file_tree.space_freed,
+                                    file_tree.files_removed,
+                                    file_tree.metric,
                                 )
                                 .progress_indicator(ui_effects.loading_progress_indicator)
                                 .path_error(ui_effects.current_path_is_red)
@@ -255,6 +277,7 @@ where
                                 BottomLine::new()
                                     .currently_selected(board.currently_selected())
                                     .last_read_path(ui_effects.last_read_path.as_ref())
+                                    .metric(file_tree.metric)
                                     .hide_delete()
                                     .hide_small_files_legend(
                                         board.unrenderable_tile_coordinates.is_none(),
@@ -279,6 +302,8 @@ where
                                 base_path_info,
                                 current_path_info,
                                 file_tree.space_freed,
+                                file_tree.files_removed,
+                                file_tree.metric,
                             )
                             .progress_indicator(ui_effects.loading_progress_indicator)
                             .path_error(ui_effects.current_path_is_red)
@@ -298,6 +323,7 @@ where
                             BottomLine::new()
                                 .currently_selected(board.currently_selected())
                                 .last_read_path(ui_effects.last_read_path.as_ref())
+                                .metric(file_tree.metric)
                                 .hide_delete()
                                 .hide_small_files_legend(
                                     board.unrenderable_tile_coordinates.is_none(),

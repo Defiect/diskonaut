@@ -1,0 +1,38 @@
+name: Release Linux x86_64
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux-x86_64:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Package archive
+        run: |
+          mkdir -p dist
+          cp target/release/diskonaut dist/diskonaut
+          tar -C dist -czf diskonaut-linux-x86_64.tar.gz diskonaut
+
+      - name: Upload archive to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" diskonaut-linux-x86_64.tar.gz --clobber

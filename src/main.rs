@@ -32,6 +32,7 @@ use tui::backend::CrosstermBackend;
 use app::{App, UiMode};
 use input::TerminalEvents;
 use messages::{handle_events, Event, Instruction};
+use state::Metric;
 
 #[cfg(not(test))]
 const SHOULD_SHOW_LOADING_ANIMATION: bool = true;
@@ -55,6 +56,9 @@ pub struct Opt {
     #[structopt(short, long)]
     /// Show file sizes rather than their block usage on disk
     apparent_size: bool,
+    #[structopt(long)]
+    /// Weight the treemap by number of files instead of cumulative size
+    count: bool,
     #[structopt(short, long)]
     /// Don't ask for confirmation before deleting
     disable_delete_confirmation: bool,
@@ -85,11 +89,16 @@ fn try_main() -> Result<(), failure::Error> {
             if !folder.as_path().is_dir() {
                 failure::bail!("Folder '{}' does not exist", folder.to_string_lossy())
             }
-            start(
+            start_with_metric(
                 terminal_backend,
                 Box::new(terminal_events),
                 folder,
                 opts.apparent_size,
+                if opts.count {
+                    Metric::Count
+                } else {
+                    Metric::Size
+                },
                 opts.disable_delete_confirmation,
             );
         }
@@ -104,6 +113,26 @@ pub fn start<B>(
     terminal_events: Box<dyn Iterator<Item = BackEvent> + Send>,
     path: PathBuf,
     show_apparent_size: bool,
+    disable_delete_confirmation: bool,
+) where
+    B: Backend + Send + 'static,
+{
+    start_with_metric(
+        terminal_backend,
+        terminal_events,
+        path,
+        show_apparent_size,
+        Metric::Size,
+        disable_delete_confirmation,
+    );
+}
+
+pub fn start_with_metric<B>(
+    terminal_backend: B,
+    terminal_events: Box<dyn Iterator<Item = BackEvent> + Send>,
+    path: PathBuf,
+    show_apparent_size: bool,
+    metric: Metric,
     disable_delete_confirmation: bool,
 ) where
     B: Backend + Send + 'static,
@@ -250,6 +279,7 @@ pub fn start<B>(
         path,
         event_sender,
         show_apparent_size,
+        metric,
         disable_delete_confirmation,
     );
     app.start(instruction_receiver);
@@ -257,5 +287,26 @@ pub fn start<B>(
 
     for thread_handler in active_threads {
         thread_handler.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use structopt::StructOpt;
+
+    use super::Opt;
+
+    #[test]
+    fn count_flag_is_disabled_by_default() {
+        let opts = Opt::from_iter_safe(&["diskonaut"]).expect("expected args to parse");
+        assert!(!opts.count);
+    }
+
+    #[test]
+    fn count_flag_can_be_enabled_with_apparent_size() {
+        let opts = Opt::from_iter_safe(&["diskonaut", "--count", "--apparent-size"])
+            .expect("expected args to parse");
+        assert!(opts.count);
+        assert!(opts.apparent_size);
     }
 }

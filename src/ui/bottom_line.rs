@@ -4,37 +4,77 @@ use ::tui::layout::Rect;
 use ::tui::style::{Color, Modifier, Style};
 use ::tui::widgets::Widget;
 
+use crate::state::Metric;
 use crate::state::tiles::{FileType, Tile};
 use crate::ui::format::{truncate_middle, DisplaySize};
 
-fn render_currently_selected(buf: &mut Buffer, currently_selected: &Tile, max_len: u16, y: u16) {
+fn file_label(count: u64) -> String {
+    if count == 1 {
+        "1 file".to_string()
+    } else {
+        format!("{} files", count)
+    }
+}
+
+fn render_currently_selected(
+    buf: &mut Buffer,
+    currently_selected: &Tile,
+    metric: Metric,
+    max_len: u16,
+    y: u16,
+) {
     let file_name = currently_selected.name.to_string_lossy();
     let size = DisplaySize(currently_selected.size as f64);
     let descendants = currently_selected.descendants;
     let (style, lines) = match currently_selected.file_type {
-        FileType::File => (
-            Style::default().add_modifier(Modifier::BOLD),
-            vec![
-                format!("SELECTED: {} ({})", file_name, size),
-                format!("SELECTED: {}", file_name),
-                format!("{}", file_name),
-            ],
-        ),
+        FileType::File => {
+            let lines = match metric {
+                Metric::Size => vec![
+                    format!("SELECTED: {} ({})", file_name, size),
+                    format!("SELECTED: {}", file_name),
+                    format!("{}", file_name),
+                ],
+                Metric::Count => vec![
+                    format!("SELECTED: {} ({}, {})", file_name, file_label(1), size),
+                    format!("SELECTED: {} ({})", file_name, file_label(1)),
+                    format!("SELECTED: {}", file_name),
+                    format!("{}", file_name),
+                ],
+            };
+            (Style::default().add_modifier(Modifier::BOLD), lines)
+        }
         FileType::Folder => (
             Style::default()
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
-            vec![
-                format!(
-                    "SELECTED: {} ({}, {} files)",
-                    file_name,
-                    size,
-                    descendants.expect("a folder should have descendants")
-                ),
-                format!("SELECTED: {} ({})", file_name, size),
-                format!("SELECTED: {}", file_name),
-                format!("{}", file_name),
-            ],
+            match metric {
+                Metric::Size => vec![
+                    format!(
+                        "SELECTED: {} ({}, {} files)",
+                        file_name,
+                        size,
+                        descendants.expect("a folder should have descendants")
+                    ),
+                    format!("SELECTED: {} ({})", file_name, size),
+                    format!("SELECTED: {}", file_name),
+                    format!("{}", file_name),
+                ],
+                Metric::Count => vec![
+                    format!(
+                        "SELECTED: {} ({}, {})",
+                        file_name,
+                        file_label(currently_selected.file_count),
+                        size
+                    ),
+                    format!(
+                        "SELECTED: {} ({})",
+                        file_name,
+                        file_label(currently_selected.file_count)
+                    ),
+                    format!("SELECTED: {}", file_name),
+                    format!("{}", file_name),
+                ],
+            },
         ),
     };
     for line in lines {
@@ -117,6 +157,7 @@ pub struct BottomLine<'a> {
     hide_small_files_legend: bool,
     currently_selected: Option<&'a Tile>,
     last_read_path: Option<&'a PathBuf>,
+    metric: Metric,
 }
 
 impl<'a> BottomLine<'a> {
@@ -126,7 +167,12 @@ impl<'a> BottomLine<'a> {
             hide_small_files_legend: false,
             currently_selected: None,
             last_read_path: None,
+            metric: Metric::Size,
         }
+    }
+    pub fn metric(mut self, metric: Metric) -> Self {
+        self.metric = metric;
+        self
     }
     pub fn hide_delete(mut self) -> Self {
         self.hide_delete = true;
@@ -148,7 +194,10 @@ impl<'a> BottomLine<'a> {
 
 impl<'a> Widget for BottomLine<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let small_files_legend = "(x = Small files)";
+        let small_files_legend = match self.metric {
+            Metric::Size => "(x = Small files)",
+            Metric::Count => "(x = Small items)",
+        };
         let small_files_len = if self.hide_small_files_legend {
             0
         } else {
@@ -159,7 +208,13 @@ impl<'a> Widget for BottomLine<'a> {
         let status_line_y = area.y + area.height - 2;
         let controls_line_y = status_line_y + 1;
         if let Some(currently_selected) = self.currently_selected {
-            render_currently_selected(buf, currently_selected, max_status_len, status_line_y);
+            render_currently_selected(
+                buf,
+                currently_selected,
+                self.metric,
+                max_status_len,
+                status_line_y,
+            );
         } else if let Some(last_read_path) = self.last_read_path {
             render_last_read_path(buf, last_read_path, max_status_len, status_line_y);
         }

@@ -9,6 +9,7 @@ pub struct FileToDelete {
     pub path_to_file: Vec<OsString>,
     pub file_type: FileType,
     pub num_descendants: Option<u64>,
+    pub file_count: u64,
     pub size: u128,
 }
 
